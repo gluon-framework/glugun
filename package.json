@@ -1,0 +1,26 @@
+{
+  "type": "module",
+  "dependencies": {
+    "esbuild": "^0.16.3",
+    "html-minifier-terser": "^7.1.0"
+  },
+  "name": "@gluon-framework/glugun",
+  "description": "Builds Gluon apps into releasable builds",
+  "version": "4.1.0",
+  "main": "src/index.js",
+  "scripts": {
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gluon-framework/glugun.git"
+  },
+  "keywords": [
+    "gluon"
+  ],
+  "author": "Gluon Framework",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/gluon-framework/glugun/issues"
+  },
+  "homepage": "https://github.com/gluon-framework/glugun#readme"
+}
