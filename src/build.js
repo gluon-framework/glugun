@@ -1,4 +1,4 @@
-import { cp, writeFile, readFile, readdir, rm, mkdir, stat, access } from 'fs/promises';
+import { cp, writeFile, readFile, readdir, rm, mkdir, stat, access, rename } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
@@ -49,64 +49,57 @@ export default async (name, dir) => {
   await rm(buildDir, { recursive: true, force: true });
   await mkdir(buildDir, { recursive: true });
 
-  await cp(dir, join(buildDir, 'src'), { recursive: true }); // copy project src to build
-  await cp(join(__dirname, '..', 'gluon'), join(buildDir, 'src', 'gluon'), { recursive: true }); // copy gluon into build
+  const appDir = join(buildDir, 'app');
+  await cp(dir, appDir, { recursive: true }); // copy project src to build
+  // await cp(join(__dirname, '..', '..', 'gluon'), join(buildDir, 'src', 'gluon'), { recursive: true }); // copy gluon into build
 
-  let indexContent = await readFile(join(buildDir, 'src', 'index.js'), 'utf8');
-  let gluonContent = await readFile(join(buildDir, 'src', 'gluon', 'index.js'), 'utf8');
+  // strip backend
+  for (const m of [ 'ws', '@gluon-framework/gluon' ]) {
+    const path = join(appDir, 'node_modules', m);
 
-  await rm(join(buildDir, 'src', 'gluon', 'node_modules'), { recursive: true, force: true });
-  if (supportFirefox) {
-    for (const m of [ 'ws', 'chrome-remote-interface' ]) {
-    const dest = join(buildDir, 'src', 'gluon', 'node_modules', m);
-    await cp(join(__dirname, '..', 'gluon', 'node_modules', m), dest, { recursive: true }); // copy gluon deps into build
-
-    for (const x of await readdir(dest)) {
-      if ([ 'bin', 'README.md', 'webpack.config.json', 'browser.js', 'chrome-remote-interface.js' ].includes(x)) await rm(join(dest, x), { recursive: true, force: true });
+    for (const x of await readdir(path)) {
+      if (
+        x.endsWith('.d.ts') || // typedef
+        x.endsWith('.md') || // markdown
+        m === 'ws' && ( // extra unused files in ws
+          x === 'browser.js' ||
+          x === 'index.js'
+        )
+      ) await rm(join(path, x), { recursive: true, force: true });
     }
-
-    if (m === 'chrome-remote-interface') await rm(join(dest, 'lib', 'protocol.json'), { force: true });
-    }
-  } else {
-    await rm(join(buildDir, 'src', 'gluon', 'browser', 'firefox.js'));
-    gluonContent = gluonContent.replace(`import Firefox from './browser/firefox.js';`, '');
   }
 
-  // await writeFile(join(buildDir, 'gluon_info.txt'), `Gluon 0.1, built with Glugun 0.1 (win32 ${attrs.join(',')})`);
+  await rm(join(appDir, 'package-lock.json'), { force: true });
+  await rm(join(appDir, 'node_modules', '.package-lock.json'), { force: true });
+  await rm(join(appDir, 'node_modules', '.bin'), { recursive: true, force: true });
 
-  indexContent = indexContent.replace('../gluon/', './gluon/');
-
-  await writeFile(join(buildDir, 'src', 'index.js'), indexContent);
-
-  gluonContent = gluonContent.replaceAll('GLUGUN_VERSION', '4.1-dev')
-    .replaceAll('EMBEDDED_NODE', embedNode);
-    // .replaceAll('SYSTEM_CHROMIUM', attrs.includes('system-chromium'))
-    // .replaceAll('SYSTEM_NODE', attrs.includes('system-node'));
-
-  await writeFile(join(buildDir, 'src', 'gluon', 'index.js'), gluonContent)
-
-  await writeFile(join(buildDir, `${name}.bat`), `node %~dp0${minifyBackend ? 'out.js' : 'src'}`);
+  await writeFile(join(buildDir, `${name}.bat`), `node %~dp0app`);
 
   if (minifyBackend) {
     log(`Pre-minify build size: ${((await dirSize(buildDir)) / 1024 / 1024).toFixed(2)}MB`);
 
+    const tmpMinDir = join(buildDir, 'mintmp');
+
     await Esbuild.build({ // bundle and minify into 1 file
-      entryPoints: [ join(buildDir, 'src', 'index.js') ],
+      entryPoints: [ join(appDir, 'index.js') ],
       bundle: true,
       minify: true,
       format: 'iife',
       platform: 'node',
-      outfile: join(buildDir, 'out.js'),
+      outfile: join(tmpMinDir, 'index.js'),
       plugins: [ esbuildPlugin ]
     });
 
-    const htmlPath = join(buildDir, 'src', 'index.html');
+    const htmlPath = join(appDir, 'index.html');
     if (await exists(htmlPath)) {
       const content = await readFile(htmlPath, 'utf8');
-      writeFile(join(buildDir, 'index.html'), await HTMLMinifier.minify(content));
+      await writeFile(join(tmpMinDir, 'index.html'), await HTMLMinifier.minify(content));
     }
 
-    await rm(join(buildDir, 'src'), { recursive: true }); // delete original src
+    await writeFile(join(tmpMinDir, 'package.json'), JSON.stringify({}));
+
+    await rm(appDir, { recursive: true }); // delete original app
+    await rename(tmpMinDir, appDir); // move mintmp to app
   }
 
   if (embedNode) {
