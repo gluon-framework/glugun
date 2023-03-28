@@ -1,10 +1,12 @@
 import { cp, writeFile, readFile, readdir, rm, mkdir, stat, access, rename } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
 
 import * as Esbuild from 'esbuild';
 import * as HTMLMinifier from 'html-minifier-terser';
+
+import * as Platforms from './platforms.js';
+import downloadGlustrap from './glustrap.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -17,8 +19,6 @@ const esbuildPlugin = { // esbuild to fix some things in src files
 
       source = source
         .replace(`const __filename = fileURLToPath(import.meta.url);\r\nconst __dirname = dirname(__filename);`, ''); // remove setting __filename/__dirname cause ESM -> CJS
-
-      source = source.replace(`let CDP;\r\ntry {\r\n  CDP = await import('chrome-remote-interface');\r\n} catch {\r\n  console.warn('Dependencies for Firefox are not installed!');\r\n}\r\n`, supportFirefox ? `import CDP from 'chrome-remote-interface';` : '');
 
       return { contents: source };
     });
@@ -44,6 +44,8 @@ const dirSize = async dir => {
 
 
 global.buildDir = join(__dirname, '..', 'build');
+global.outDir = join(__dirname, '..', 'out');
+
 export default async (name, dir) => {
   // reset build dir
   await rm(buildDir, { recursive: true, force: true });
@@ -51,7 +53,6 @@ export default async (name, dir) => {
 
   const appDir = join(buildDir, 'app');
   await cp(dir, appDir, { recursive: true }); // copy project src to build
-  // await cp(join(__dirname, '..', '..', 'gluon'), join(buildDir, 'src', 'gluon'), { recursive: true }); // copy gluon into build
 
   // strip backend
   for (const m of [ 'ws', '@gluon-framework/gluon' ]) {
@@ -69,6 +70,7 @@ export default async (name, dir) => {
     }
   }
 
+  await rm(join(appDir, 'gluon_data'), { recursive: true, force: true });
   await rm(join(appDir, 'package-lock.json'), { force: true });
   await rm(join(appDir, 'node_modules', '.package-lock.json'), { force: true });
   await rm(join(appDir, 'node_modules', '.bin'), { recursive: true, force: true });
@@ -102,22 +104,19 @@ export default async (name, dir) => {
     await rename(tmpMinDir, appDir); // move mintmp to app
   }
 
-  if (embedNode) {
-    log('Embedding Node... (VERY EXPERIMENTAL!)');
+  if (makeBinaries) {
+    log('Making binaries... (EXPERIMENTAL!)');
 
-    const binary = name + '.exe';
-    const hasHtml = false; // await exists(join(buildDir, 'index.html'));
+    for (const given of binaryPlatforms) {
+      const [ plat, arch = Platforms.currentArch ] = given.split('-');
+      log(`Building ${plat} ${arch}`);
 
-    execSync(`nexe -t 19.2.0 -o "${binary}" ${hasHtml ? `-r "index.html"` : ''} --build -m=without-intl -m=nonpm -m=nocorepack --verbose -i "${minifyBackend ? 'out.js' : join('src', 'index.js')}"`, {
-      cwd: buildDir,
-      // stdio: 'inherit'
-    });
+      const dir = join(outDir, `${plat}-${arch}`);
+      await rm(dir, { recursive: true, force: true });
+      await mkdir(dir, { recursive: true });
 
-    // execSync(`nexe -t 19.2.0 -o "${join(buildDir, binary)}" --build --verbose -i "${entryPoint}"`, { stdio: 'inherit' });
-    if (minifyBinary) execSync(`upx --best --lzma "${join(buildDir, binary)}"`, { stdio: 'inherit' });
-
-    for (const x of await readdir(buildDir)) {
-      if (x !== binary && x !== 'index.html') await rm(join(buildDir, x), { recursive: true });
+      await downloadGlustrap({ plat, arch }, join(dir, name + (plat === 'win' ? '.exe' : '')));
+      await cp(appDir, join(dir, 'app'), { recursive: true, force: true });
     }
   }
 };

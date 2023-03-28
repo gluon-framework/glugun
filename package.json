@@ -1,14 +1,14 @@
 {
+  "name": "@gluon-framework/glugun",
+  "description": "Builds Gluon apps into releasable builds",
+  "version": "0.1.0",
+  "main": "src/index.js",
+  "scripts": {
+  },
   "type": "module",
   "dependencies": {
     "esbuild": "^0.16.3",
     "html-minifier-terser": "^7.1.0"
-  },
-  "name": "@gluon-framework/glugun",
-  "description": "Builds Gluon apps into releasable builds",
-  "version": "4.1.0",
-  "main": "src/index.js",
-  "scripts": {
   },
   "repository": {
     "type": "git",
