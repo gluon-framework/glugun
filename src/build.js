@@ -45,6 +45,7 @@ const dirSize = async dir => {
 
 global.buildDir = join(__dirname, '..', 'build');
 global.outDir = join(__dirname, '..', 'out');
+global.cacheDir = join(__dirname, '..', 'cache');
 
 export default async (name, dir) => {
   // reset build dir
@@ -106,6 +107,8 @@ export default async (name, dir) => {
 
   if (makeBinaries) {
     log('Making binaries... (EXPERIMENTAL!)');
+
+    await mkdir(join(cacheDir, 'glustrap'), { recursive: true });
 
     for (const given of binaryPlatforms) {
       const [ plat, arch = Platforms.currentArch ] = given.split('-');
