@@ -38,16 +38,13 @@ const dirSize = async dir => {
   return (await Promise.all(paths)).flat(Infinity).reduce((acc, x) => acc + x, 0);
 };
 
-const build = async (dir, platform = 'win32') => {
+const build = async (dir) => {
   const name = basename(dir);
 
   if (minifyBackend) log(`Minifying is experimental!`);
 
-  console.log();
   const startTime = performance.now();
-  switch (platform) {
-    case 'win32': await Build(name, dir);
-  }
+  await Build(name, dir);
 
   log(`Finished build in: ${((performance.now() - startTime) / 1024).toFixed(2)}s`);
   log(`Final build size: ${((await dirSize(outDir)) / 1024 / 1024).toFixed(2)}MB`);
