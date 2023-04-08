@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 import * as Esbuild from 'esbuild';
 import * as HTMLMinifier from 'html-minifier-terser';
 
+import GlushakerWindow from './glushaker/window.js';
+
 import * as Platforms from './platforms.js';
 import downloadGlustrap from './glustrap.js';
 
@@ -78,6 +80,18 @@ export default async (name, dir) => {
 
   await writeFile(join(buildDir, `${name}.bat`), `node %~dp0app`);
 
+  const glushakeArg = process.argv.indexOf('--glushake');
+  if (glushakeArg !== -1) {
+    log('Tree shaking Gluon Window APIs... (EXPERIMENTAL!)');
+
+    log(`Pre-glushake build size: ${((await dirSize(buildDir)) / 1024 / 1024).toFixed(2)}MB`);
+
+    const apis = process.argv[glushakeArg + 1]?.split(',') ?? [];
+    await GlushakerWindow(appDir, apis);
+
+    log(`Post-glushake build size: ${((await dirSize(buildDir)) / 1024 / 1024).toFixed(2)}MB`);
+  }
+
   if (minifyBackend) {
     log(`Pre-minify build size: ${((await dirSize(buildDir)) / 1024 / 1024).toFixed(2)}MB`);
 
@@ -103,6 +117,8 @@ export default async (name, dir) => {
 
     await rm(appDir, { recursive: true }); // delete original app
     await rename(tmpMinDir, appDir); // move mintmp to app
+
+    log(`Post-minify build size: ${((await dirSize(buildDir)) / 1024 / 1024).toFixed(2)}MB`);
   }
 
   if (makeBinaries) {
